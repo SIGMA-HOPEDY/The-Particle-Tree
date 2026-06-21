@@ -33,8 +33,7 @@ function canGenPoints(){
 }
 
 function addedPlayerData() {
-    return { alphaChallengeCompletions: 0  // 记录 Alpha 挑战1 完成次数
-
+    return { 
     };
 }
 function getPointGen() {
@@ -44,30 +43,28 @@ function getPointGen() {
     if (hasUpgrade('A', 11)) gain = gain.add(1);
     if (hasUpgrade('A', 12)) gain = gain.add(upgradeEffect('A', 12));
     if (hasUpgrade('A', 13)) gain = gain.add(upgradeEffect('A', 13));
+    if (hasUpgrade('A', 41)) gain = gain.add(upgradeEffect('A', 41));
     if (hasBuyables('A', 11)) gain = gain.add(buyableEffect('A', 11));
     if (hasUpgrade('A', 14)) gain = gain.times(upgradeEffect('A', 14));
     if (hasUpgrade('A', 15)) gain = gain.times(upgradeEffect('A', 15));
     if (hasUpgrade('A', 11)) gain = gain.times(upgradeEffect('A', 11));
+    if (hasUpgrade('A', 42)) gain = gain.times(upgradeEffect('A', 42));
+    if (hasUpgrade('A', 45)) gain = gain.times(upgradeEffect('A', 45));
+    if (player.B.points > 0) gain = gain.times(player.B.points.add(1)).pow(2);
     if (hasBuyables('A', 12)) gain = gain.times(buyableEffect('A', 12));
-    let completions = player.alphaChallengeCompletions || 0;
-    if (completions > 0) {
-        gain = gain.times(Decimal.pow(2, completions));
-    }
+    if (hasUpgrade('A', 35)) gain = gain.times(upgradeEffect('A', 35));
     if (hasUpgrade('A', 21)) gain = gain.pow(upgradeEffect('A', 21));
     if (hasUpgrade('A', 22)) gain = gain.pow(upgradeEffect('A', 22));
     if (hasBuyables('A', 13)) gain = gain.pow(buyableEffect('A', 13));
-    if (player.A.challenges?.[11]?.active) {
-        let completions = player.alphaChallengeCompletions || 0;
-        let exponent = new Decimal(0.5);
-        gain = gain.pow(exponent);
-    }
+    if (hasUpgrade('A', 43)) gain = gain.pow(upgradeEffect('A', 43));
+    
     function isValidDecimal(v) {
         return v instanceof Decimal && v.isFinite() && !v.isNan();
     }
 
+    // ---------- 软上限处理（只计算，不 return） ----------
     let pointmax = new Decimal(1e9);
     const softcapThreshold = new Decimal(pointmax);
-
     let postSoftcapGain;
     if (gain.gt(softcapThreshold) && isValidDecimal(gain)) {
         let excess = gain.minus(softcapThreshold);
@@ -78,7 +75,6 @@ function getPointGen() {
             if (ratio.lte(1)) ratio = new Decimal(1.0000000001);
             let Log10Gain = ratio.log10();
             let Log10Log10Gain = Log10Gain.log10();
-
             if (!isValidDecimal(Log10Log10Gain)) {
                 postSoftcapGain = softcapThreshold.plus(excess);
             } else {
@@ -86,14 +82,13 @@ function getPointGen() {
                 if (!isValidDecimal(exponent) || exponent.lte(0)) {
                     exponent = new Decimal(0.9);
                 }
-
                 let cappedExcess = excess.pow(exponent);
                 if (!isValidDecimal(cappedExcess)) {
                     cappedExcess = excess;
                 }
                 postSoftcapGain = softcapThreshold.plus(cappedExcess);
                 if (tmp && tmp.other) {
-                    tmp.other.softcapHint = "由于你的粒子获取大于" + pointmax + ",粒子获取受到软上限!(^" + exponent + ")";
+                    tmp.other.softcapHint = "粒子获取大于" + pointmax + "后,粒子获取受到软上限!(^" + exponent + ")";
                     tmp.other.softcappedPointGen = postSoftcapGain;
                 }
             }
@@ -111,14 +106,14 @@ function getPointGen() {
     let doubleCappedGain;
     if (postSoftcapGain.gt(doubleSoftcapThreshold)) {
         let doubleExcess = postSoftcapGain.minus(doubleSoftcapThreshold);
-    let Log10Post = (postSoftcapGain.div(doublepointmax).add(1)).log10();
-    let Log10Log10Post = (Log10Post.add(1)).log10();
-    let doubleExponent = new Decimal(8).div(new Decimal(9.1).plus(Log10Log10Post));
-    let doubleCappedExcess = doubleExcess.pow(doubleExponent);
+        let Log10Post = (postSoftcapGain.div(doublepointmax).add(1)).log10();
+        let Log10Log10Post = (Log10Post.add(1)).log10();
+        let doubleExponent = new Decimal(8).div(new Decimal(9.1).plus(Log10Log10Post));
+        let doubleCappedExcess = doubleExcess.pow(doubleExponent);
         doubleCappedGain = doubleSoftcapThreshold.plus(doubleCappedExcess);
-    if (tmp && tmp.other) {
-        tmp.other.doubleSoftcapHint = "由于你的粒子获取大于"+ doublepointmax+",粒子获取受到二重软上限!(^" + doubleExponent + ")";
-    }
+        if (tmp && tmp.other) {
+            tmp.other.doubleSoftcapHint = "粒子获取大于" + doublepointmax + "后,粒子获取受到二重软上限!(^" + doubleExponent + ")";
+        }
     } else {
         if (tmp && tmp.other) {
             tmp.other.doubleSoftcapHint = "";
@@ -128,43 +123,63 @@ function getPointGen() {
 
     let triplepointmax = new Decimal("1e1000");
     const tripleSoftcapThreshold = new Decimal(triplepointmax);
+    let tripleCappedGain;
     if (doubleCappedGain.gt(tripleSoftcapThreshold)) {
         let tripleExcess = doubleCappedGain.minus(tripleSoftcapThreshold);
         let Log10PostTriple = (doubleCappedGain.div(triplepointmax).add(1)).log10();
         let Log10Log10PostTriple = (Log10PostTriple.add(1)).log10();
         let tripleExponent = new Decimal(6.9).div(new Decimal(10.78).plus(Log10Log10PostTriple));
         let tripleCappedExcess = tripleExcess.pow(tripleExponent);
-        let tripleCappedGain = tripleSoftcapThreshold.plus(tripleCappedExcess);
+        tripleCappedGain = tripleSoftcapThreshold.plus(tripleCappedExcess);
         if (tmp && tmp.other) {
-            tmp.other.tripleSoftcapHint = "由于你的粒子获取大于"+ triplepointmax+",粒子获取受到三重软上限!(^" + tripleExponent + ")";
-        }
-
-        let quadruplepointmax = new Decimal("1e7000");
-        const quadrupleSoftcapThreshold = new Decimal(quadruplepointmax);
-        if (tripleCappedGain.gt(quadrupleSoftcapThreshold)) {
-            let quadrupleExcess = tripleCappedGain.minus(quadrupleSoftcapThreshold);
-    let Log10PostQuad = (tripleCappedGain.div(quadruplepointmax).add(1)).log10();
-    let Log10Log10PostQuad = (Log10PostQuad.add(1)).log10();
-    let quadrupleExponent = new Decimal(7.8).div(new Decimal(17).plus(Log10Log10PostQuad));
-    let quadrupleCappedExcess = quadrupleExcess.pow(quadrupleExponent);
-    let quadrupleCappedGain = quadrupleSoftcapThreshold.plus(quadrupleCappedExcess);
-            if (tmp && tmp.other) {
-                tmp.other.quadrupleSoftcapHint = "由于你的粒子获取大于" + quadruplepointmax + ",粒子获取受到四重软上限!(^" + quadrupleExponent + ")";
-            }
-            return quadrupleCappedGain;
-        } else {
-            if (tmp && tmp.other) {
-                tmp.other.quadrupleSoftcapHint = "";
-            }
-            return tripleCappedGain;
+            tmp.other.tripleSoftcapHint = "粒子获取大于" + triplepointmax + "后,粒子获取受到三重软上限!(^" + tripleExponent + ")";
         }
     } else {
         if (tmp && tmp.other) {
             tmp.other.tripleSoftcapHint = "";
         }
-        return doubleCappedGain;
+        tripleCappedGain = doubleCappedGain;
     }
+
+    let quadruplepointmax = new Decimal("1e7000");
+    const quadrupleSoftcapThreshold = new Decimal(quadruplepointmax);
+    let quadrupleCappedGain;
+    if (tripleCappedGain.gt(quadrupleSoftcapThreshold)) {
+        let quadrupleExcess = tripleCappedGain.minus(quadrupleSoftcapThreshold);
+        let Log10PostQuad = (tripleCappedGain.div(quadruplepointmax).add(1)).log10();
+        let Log10Log10PostQuad = (Log10PostQuad.add(1)).log10();
+        let quadrupleExponent = new Decimal(7.8).div(new Decimal(17).plus(Log10Log10PostQuad));
+        let quadrupleCappedExcess = quadrupleExcess.pow(quadrupleExponent);
+        quadrupleCappedGain = quadrupleSoftcapThreshold.plus(quadrupleCappedExcess);
+        if (tmp && tmp.other) {
+            tmp.other.quadrupleSoftcapHint = "粒子获取大于" + quadruplepointmax + "后,粒子获取受到四重软上限!(^" + quadrupleExponent + ")";
+        }
+    } else {
+        if (tmp && tmp.other) {
+            tmp.other.quadrupleSoftcapHint = "";
+        }
+        quadrupleCappedGain = tripleCappedGain;
+    }
+
+    // ---------- ✨ 挑战逻辑（放在所有软上限之后，返回之前） ----------
+    let finalGain = quadrupleCappedGain;
+
+ // ---------- 挑战惩罚 ----------
+let challengeCompletions = player.A.challenges?.[11] || 0;
+if (player.A.activeChallenge === 11) {
+    let exponent = 0.8 - 0.15 * challengeCompletions;
+    if (exponent < 0) exponent = 0;     // 防止负指数
+    finalGain = finalGain.pow(exponent);
 }
+
+// 挑战奖励（完成次数 >= 1）
+if ((player.A.challenges[11] || 0) >= 1) {
+    // 注意：奖励应作用于 Alpha 粒子，不要直接乘在 finalGain 上
+    // 这里建议将奖励逻辑移到 Alpha 粒子转换计算中
+}
+    return finalGain;
+}
+
 // 辅助函数：检查是否拥有指定 buyable
 function hasBuyables(layer, id) {
     let amt = player[layer]?.buyables?.[id];
