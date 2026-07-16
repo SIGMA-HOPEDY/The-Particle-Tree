@@ -1,5 +1,5 @@
 export let modInfo = {
-	name: "The P-P Tree",
+	name: "The Particle Tree",
 	author: "nobody",
 	pointsName: "points",
 	modFiles: ["layers.js", "tree.js"],
