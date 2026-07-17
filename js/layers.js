@@ -276,7 +276,9 @@ if (player.B.flyers && player.B.flyers[11].amount.gt(0)) {
     buyables: {
         11: {
             title: "粒子生成器",
-            unlocked() { return hasUpgrade('A', 12) },
+            unlocked() {
+        return hasUpgrade('A', 12) && player.A.activeChallenge != 12;
+    },
             cost(x) {
                 if (x.eq(0)) return new Decimal(1);
                 return Decimal.pow(x.add(1).log10().add(1.1), x.times(1.1)).floor()
@@ -312,7 +314,9 @@ if (player.B.flyers && player.B.flyers[11].amount.gt(0)) {
         },
         12: {
             title: "粒子增幅器",
-            unlocked() { return hasUpgrade('A', 14) },
+            unlocked() {
+        return hasUpgrade('A', 14) && player.A.activeChallenge != 12;
+    },
             cost(x) {
                 if (x.eq(0)) return new Decimal(10);
                 return Decimal.pow(x.add(1).log10().add(2.2), x.times(1.2)).times(10).floor()
@@ -346,7 +350,9 @@ if (player.B.flyers && player.B.flyers[11].amount.gt(0)) {
         },
         13: {
             title: "粒子振荡器",
-            unlocked() { return hasUpgrade('A', 21) },
+            unlocked() {
+        return hasUpgrade('A', 21) && player.A.activeChallenge != 12;
+    },
             cost(x) {
                 if (x.eq(0)) return new Decimal(100);
                 return Decimal.pow(x.times(0.056).add(4.4), x.times(1.3)).times(100).floor()
@@ -385,7 +391,7 @@ if (player.B.flyers && player.B.flyers[11].amount.gt(0)) {
             challengeDescription() {
                 let comp = player.A.challenges[11] || 0;
                 let exp = Math.max(0.8 - 0.15 * comp, 0.05);
-                return `粒子生成 ^ ${exp.toFixed(1)} （完成次数：${comp}）`;
+                return `粒子生成 ^ ${exp.toFixed(1)} (可完成次数：5)`;
             },
             goal: new Decimal("1e9"),
             completionLimit: 5,
@@ -393,9 +399,26 @@ if (player.B.flyers && player.B.flyers[11].amount.gt(0)) {
             rewardDescription() {
                 let comp = player.A.challenges[11] || 0;
                 let mult = Decimal.pow(comp * 0.2 + 2, comp);
-                return `Alpha粒子获得 *${format(mult)} （已完成 ${comp} 次）`;
+                return `Alpha粒子获得 *${format(mult)} (已完成 ${comp} 次)`;
             },
         },
+        12: {
+    name: "无法生成",
+    challengeDescription() {
+        return "粒子生成器、增幅器、振荡器被禁用。(可完成次数：4)";
+    },
+    goal() {
+        let comp = player.A.challenges?.[12] || 0;
+        return Decimal.pow("1e10", comp + 1);
+    },
+    completionLimit: 4,
+    unlocked() { return hasMilestone('B', 3); },
+    rewardDescription() {
+        let comp = player.A.challenges?.[12] || 0;
+        let mult = comp * 0.25;
+        return `β粒子生成对数基数 -${mult},分母基数 -${comp * 0.5} (已完成 ${comp} 次)`;
+    },
+}
     },
 });
 
@@ -424,45 +447,53 @@ addLayer("B", {
 
     layerShown() { return hasUpgrade('A', 45) || player.B.unlocked; },
     baseAmount() { return player.A.points; },
+    // 计算叠加了所有升级和挑战奖励后的 m、n
+getEffectiveMN() {
+    let m = new Decimal(0);
+    let n = new Decimal(0);
 
+    // 挑战 2 奖励：每完成一次，m 和 n 各 +0.25
+    let comp12 = player.A.challenges?.[12] || 0;
+    if (comp12 >= 1) {
+        m = m.add(comp12 * 0.25);
+        n = n.add(comp12 * 0.5);
+    }
+    if (hasUpgrade('B', 13)) m = m.add(upgradeEffect('B', 13));
+  if (hasUpgrade('B', 15)) m = m.add(upgradeEffect('B', 15));
+  if (hasUpgrade('B', 12)) n = n.add(upgradeEffect('B', 12));
+  if (hasUpgrade('B', 14)) n = n.add(upgradeEffect('B', 14));
+
+    return { m, n };
+},
     // β 粒子获取公式
-    getResetGain() {
-        let alpha = player.A.points.add(1);
-        let base = Decimal.max(Decimal.sub(10, player.B.m), 2);
-        let divisor = Decimal.max(1, Decimal.sub(25, player.B.n));
-        let log10e = new Decimal(Math.log10(Math.E));
-        let logAlpha = alpha.log10().div(log10e);
-        let logBase = base.log10().div(log10e);
-        let basegain = logAlpha.div(logBase).div(divisor).floor();
-        let mult = new Decimal(1);
-        if (hasMilestone('B', 2)) mult = mult.times(player.A.points.add(1).log10().add(1).log10().add(2));
-        let exp = new Decimal(1);
-        let gain = basegain.times(mult).pow(exp);
-        return gain.max(0);
-    },
+getResetGain() {
+    let alpha = player.A.points.add(1);
+    let { m, n } = this.getEffectiveMN();   // ← 用统一函数获取
 
-    getNextAt(canMax) {
-    let base = Decimal.max(Decimal.sub(10, player.B.m), 1);
-    let divisor = Decimal.max(1, Decimal.sub(25, player.B.n));
+    let base = Decimal.max(Decimal.sub(10, m), 2);
+    let divisor = Decimal.max(1, Decimal.sub(25, n));
 
-    // 1. 获取当前总增益（已含 mult 和 exp）
+    let log10e = new Decimal(Math.log10(Math.E));
+    let logAlpha = alpha.log10().div(log10e);
+    let logBase = base.log10().div(log10e);
+
+    let mult = new Decimal(1);
+    if (hasMilestone('B', 2)) mult = mult.times(player.A.points.add(1).log10().add(1).log10().add(2));
+    let exp = new Decimal(1);
+    let basegain = logAlpha.div(logBase).div(divisor).times(mult).pow(exp).floor();
+    return basegain.max(0);
+},
+
+getNextAt(canMax) {
+    let { m, n } = this.getEffectiveMN();   // ← 用统一函数获取
+
+    let base = Decimal.max(Decimal.sub(10, m), 1);
+    let divisor = Decimal.max(1, Decimal.sub(25, n));
+
     let currentGain = this.getResetGain();
     let targetGain = currentGain.add(1);
-
-    // 2. 反推基础增益（basegain）
-    let mult = new Decimal(1);
-    if (hasMilestone('B', 2)) mult = mult.times(2);
-    let exp = new Decimal(1);
-    
-    let baseGain = targetGain;
-    // 逆向指数
-    if (exp.gt(1)) baseGain = baseGain.root(exp);
-    // 逆向乘数
-    if (mult.gt(1)) baseGain = baseGain.div(mult);
-
-    // 3. 用基础增益反算所需 Alpha
-    let req = Decimal.pow(base, baseGain.times(divisor)).sub(1);
-    return req.max(1).ceil();
+    let req = Decimal.pow(base, targetGain.times(divisor)).sub(1);
+    return req.max(1);
 },
 
     prestigeButtonText() {
@@ -480,12 +511,13 @@ addLayer("B", {
             content: [
                 "main-display",
                 ["display-text", function() {
-                    let base = Decimal.max(Decimal.sub(10, player.B.m), 1);
-                    let divisor = Decimal.max(1, Decimal.sub(25, player.B.n));
-                    let formula = `β粒子获得=log_${formatWhole(base)}(α粒子+1)/${formatWhole(divisor)}`;
-                    let beta = player.B.points.add(1);
-                    return `${formula}\nβ粒子使粒子获得*${format(beta.pow(2))}\nAlpha粒子获得*${format(beta)}`;
-                }],
+    let { m, n } = layers.B.getEffectiveMN();
+    let base = Decimal.max(Decimal.sub(10, m), 1);
+    let divisor = Decimal.max(1, Decimal.sub(25, n));
+    let formula = `β粒子获得=log_${format(base, 2)}(α粒子+1)/${format(divisor, 2)}`;
+    let beta = player.B.points.add(1);
+    return `${formula}\nβ粒子使粒子获得*${format(beta.pow(2))}\nAlpha粒子获得*${format(beta)}`;
+}],
                 "prestige-button",
                 "blank",
                 "milestones",
@@ -506,22 +538,26 @@ addLayer("B", {
             title: "分母缩短 I",
             description: "分母减少 1",
             cost: new Decimal(3),
-            onPurchase() {
-                player.B.n = player.B.n.add(1);   // ← 一次性增加
+           effect() {
+                let raw = new Decimal(1);
+                return raw;
             },
             effectDisplay() {
-                return `当前 n = ${formatWhole(player.B.n)}`;
-            },
+    let { n } = layers.B.getEffectiveMN();
+    return `当前 n = ${format(n, 2)}`;
+},
         },
         13: {
             title: "底数减少 I",
             description: "底数减少 1",
             cost: new Decimal(5),
-            onPurchase() {
-                player.B.m = player.B.m.add(1);
+             effect() {
+                let raw = new Decimal(1);
+                return raw;
             },
             effectDisplay() {
-                return `当前 m = ${formatWhole(player.B.m)}`;
+                let { m } = layers.B.getEffectiveMN();
+                return `当前 m = ${format(m, 2)}`;
             },
         },
         14: {
@@ -529,24 +565,28 @@ addLayer("B", {
             description: "分母减少 2",
             cost: new Decimal(7),
             unlocked() { return hasUpgrade('B', 12); },
-            onPurchase() {
-                player.B.n = player.B.n.add(2);
+            effect() {
+                let raw = new Decimal(2);
+                return raw;
             },
             effectDisplay() {
-                return `当前 n = ${formatWhole(player.B.n)}`;
-            },
+    let { n } = layers.B.getEffectiveMN();
+    return `当前 n = ${format(n, 2)}`;
+},
         },
         15: {
             title: "底数减少 II",
             description: "底数减少 2",
             cost: new Decimal(10),
             unlocked() { return hasUpgrade('B', 13); },
-            onPurchase() {
-                player.B.m = player.B.m.add(2);
+           effect() {
+                let raw = new Decimal(2);
+                return raw;
             },
             effectDisplay() {
-                return `当前 m = ${formatWhole(player.B.m)}`;
-            },
+    let { m } = layers.B.getEffectiveMN();
+    return `当前 m = ${format(m, 2)}`;
+},
         },
     },
 update(diff) {
@@ -681,6 +721,11 @@ buyables: {
             effectDescription: "Beta粒子获取*(2+lg(lg(Alpha粒子数+1)+1)),解锁购买项",
             done() { return player.B.points.gte(10); },
         },
+        3: {
+            requirementDescription: "100 β粒子",
+            effectDescription: "解锁Alpha挑战2",
+            done() { return player.B.points.gte(100); },
+        },
     },
 });
 
@@ -690,9 +735,75 @@ addLayer("ach", {
     position: 0,
     row: "side",
     color: "#fbff00ff",
-    resource: "achievements",
+    resource: "成就点数",
     type: "none",
     startData() { return { unlocked: true, points: new Decimal(0) } },
     layerShown() { return true },
-    achievements: {},
+
+    tabFormat: {
+        "成就": {
+            content: ["main-display", "blank", "achievements"]
+        },
+        "里程碑": {
+            content: ["main-display", "blank", "milestones"]
+        },
+    },
+    milestones: {
+        
+        0: {
+            requirementDescription: "成就优化I (36成就点)",
+            effectDescription: "成就点效果^1.3",
+            done() { return player.ach.points.gte(36); }
+        },
+        1: {
+            requirementDescription: "成就优化II (60成就点)",
+            effectDescription: "成就点效果^1.5",
+            done() { return player.ach.points.gte(60); }
+        },
+    },
+    achievements: {
+        rows: 6,
+        cols: 6,
+      
+        11: { name: "起点", tooltip: "获得10粒子 奖励:1成就点。", done() { return player.points.gte(10); }, onComplete() { addPoints("ach", 1); } },
+        12: { name: "首次 Alpha", tooltip: "获得1 Alpha 粒子 奖励:1成就点。", done() { return player.A.points.gte(1); }, onComplete() { addPoints("ach", 1); } },
+        13: { name: "百倍 Alpha", tooltip: "获得100 Alpha 粒子 奖励:1成就点。", done() { return player.A.points.gte(100); }, onComplete() { addPoints("ach", 1); } },
+        14: { name: "生成器", tooltip: "购买1个粒子生成器 奖励:1成就点。", done() { return (player.A.buyables[11] || new Decimal(0)).gte(1); }, onComplete() { addPoints("ach", 1); } },
+        15: { name: "增幅器", tooltip: "购买1个粒子增幅器 奖励:1成就点。", done() { return (player.A.buyables[12] || new Decimal(0)).gte(1); }, onComplete() { addPoints("ach", 1); } },
+        16: { name: "振荡器", tooltip: "购买1个粒子振荡器 奖励:1成就点。", done() { return (player.A.buyables[13] || new Decimal(0)).gte(1); }, onComplete() { addPoints("ach", 1); } },
+        21: { name: "万倍 Alpha", tooltip: "获得1e4 Alpha 粒子 奖励:2成就点。", done() { return player.A.points.gte(1e4); }, onComplete() { addPoints("ach", 2); } },
+        22: { name: "!?99?!", tooltip: "获得9e9 粒子 奖励:2成就点。", done() { return player.points.gte(1e6); }, onComplete() { addPoints("ach", 2); } },
+        23: { name: "首次挑战", tooltip: "完成1次 Alpha 挑战1 奖励:2成就点。", done() { return (player.A.challenges[11] || 0) >= 1; }, onComplete() { addPoints("ach", 2); } },
+        24: { name: "堙灭专家", tooltip: "完成5次 Alpha 挑战1 奖励:2成就点。", done() { return (player.A.challenges[11] || 0) >= 5; }, onComplete() { addPoints("ach", 2); } },
+        25: { name: "生成器达人", tooltip: "购买40个粒子生成器 奖励:2成就点。", done() { return (player.A.buyables[11] || new Decimal(0)).gte(40); }, onComplete() { addPoints("ach", 2); } },
+        26: { name: "增幅器达人", tooltip: "购买20个粒子增幅器 奖励:2成就点。", done() { return (player.A.buyables[12] || new Decimal(0)).gte(20); }, onComplete() { addPoints("ach", 2); } },
+        31: { name: "振荡器达人", tooltip: "购买10个粒子振荡器 奖励:2成就点。", done() { return (player.A.buyables[13] || new Decimal(0)).gte(10); }, onComplete() { addPoints("ach", 2); } },
+        32: { name: "第二层", tooltip: "解锁 Beta 层 奖励:2成就点。", done() { return player.B.unlocked; }, onComplete() { addPoints("ach", 3); } },
+        33: { name: "Alpha", tooltip: "获得1e25 Alpha 粒子 奖励:3成就点。", done() { return player.A.points.gte(1e25); }, onComplete() { addPoints("ach", 3); } },
+        34: { name: "天文粒子", tooltip: "获得1e50 粒子 奖励:3成就点。", done() { return player.points.gte("1e50"); }, onComplete() { addPoints("ach", 3); } },
+        35: { name: "Beta 起点", tooltip: "获得1 Beta 粒子 奖励:3成就点。", done() { return player.B.points.gte(1); }, onComplete() { addPoints("ach", 3); } },
+        36: { name: "百倍 Beta", tooltip: "获得100 Beta 粒子 奖励:3成就点。", done() { return player.B.points.gte(100); }, onComplete() { addPoints("ach", 3); } },
+        41: { name: "分母缩短", tooltip: "购买 B-12 分母缩短 I 奖励:4成就点。", done() { return hasUpgrade('B', 12); }, onComplete() { addPoints("ach", 4); } },
+        42: { name: "底数减少", tooltip: "购买 B-13 底数减少 I 奖励:4成就点。", done() { return hasUpgrade('B', 13); }, onComplete() { addPoints("ach", 4); } },
+        43: { name: "飞越器 I", tooltip: "购买1个飞越器 I 奖励:4成就点。", done() { return player.B.flyers[11].amount.gte(1); }, onComplete() { addPoints("ach", 4); } },
+        44: { name: "飞越器 II", tooltip: "购买1个飞越器 II 奖励:4成就点。", done() { return player.B.flyers[12].amount.gte(1); }, onComplete() { addPoints("ach", 4); } },
+        45: { name: "飞越器 III", tooltip: "购买1个飞越器 III 奖励:4成就点。", done() { return player.B.flyers[13].amount.gte(1); }, onComplete() { addPoints("ach", 4); } },
+        46: { name: "无法生成", tooltip: "完成1次 Alpha 挑战2 奖励:4成就点。", done() { return (player.A.challenges[12] || 0) >= 1; }, onComplete() { addPoints("ach", 4); } },
+        51: { name: "分母全开", tooltip: "分母达到 20 奖励:5成就点。", done() { let { n } = layers.B.getEffectiveMN(); return n.gte(5); }, onComplete() { addPoints("ach", 5); } },
+        52: { name: "底数全开", tooltip: "底数达到 6 奖励:5成就点。", done() { let { m } = layers.B.getEffectiveMN(); return m.gte(4); }, onComplete() { addPoints("ach", 5); } },
+        53: { name: "生成器满级", tooltip: "购买100个粒子生成器 奖励:5成就点。", done() { return (player.A.buyables[11] || new Decimal(0)).gte(100); }, onComplete() { addPoints("ach", 5); } },
+        54: { name: "增幅器满级", tooltip: "购买100个粒子增幅器 奖励:5成就点。", done() { return (player.A.buyables[12] || new Decimal(0)).gte(100); }, onComplete() { addPoints("ach", 5); } },
+        55: { name: "振荡器满级", tooltip: "购买100个粒子振荡器 奖励:5成就点。", done() { return (player.A.buyables[13] || new Decimal(0)).gte(100); }, onComplete() { addPoints("ach", 5); } },
+        56: { name: "无法生成专家", tooltip: "完成4次 Alpha 挑战2 奖励:5成就点。", done() { return (player.A.challenges[12] || 0) >= 4; }, onComplete() { addPoints("ach", 5); } },
+    },
+    effect() {
+        let base = player.ach.points.div(10).add(1);
+        let raw = base.pow(player.ach.points.div(25).add(1));
+        if (hasMilestone('ach', 0)) raw = raw.pow(1.3);
+        if (hasMilestone('ach', 1)) raw = raw.pow(1.5);
+        return raw;
+    },
+    effectDescription() {
+        return "成就点数使粒子获取 *" + format(tmp.ach.effect);
+    },
 });

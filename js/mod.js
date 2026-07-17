@@ -50,7 +50,9 @@ function getPointGen() {
     if (hasUpgrade('A', 11)) gain = gain.add(1);
     if (hasUpgrade('A', 12)) gain = gain.add(1);
     if (hasUpgrade('A', 13)) gain = gain.add(upgradeEffect('A', 13));
+    if (player.A.activeChallenge != 12) {
     if (hasBuyable('A', 11)) gain = gain.add(buyableEffect('A', 11));
+}
 
     // ---- 乘法加成 ----
     if (hasUpgrade('A', 14)) gain = gain.times(upgradeEffect('A', 14));
@@ -61,6 +63,7 @@ function getPointGen() {
     if (hasUpgrade('A', 35)) gain = gain.times(upgradeEffect('A', 35));
     if (hasUpgrade('A', 41)) gain = gain.times(upgradeEffect('A', 41));
     if (player.B.points > 0) gain = gain.times(player.B.points.add(1).pow(2));
+    if (tmp.ach?.effect) gain = gain.times(tmp.ach.effect);
     
 
     // ---- 指数加成 ----
