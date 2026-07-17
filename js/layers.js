@@ -243,7 +243,9 @@ if (player.B.flyers && player.B.flyers[11].amount.gt(0)) {
             cost: new Decimal(1e16),
             unlocked() { return hasUpgrade('A', 42) },
             effect() {
-                let comp = player.A.challenges?.[11] || 0;
+                let comp1 = player.A.challenges?.[11] || 0;
+                let comp2 = player.A.challenges?.[12] || 0;
+                let comp = comp1 + comp2;
                 return new Decimal(1 + 0.002 * comp);
             },
             effectDisplay() { return '^' + format(upgradeEffect(this.layer, this.id), 4, true) },
